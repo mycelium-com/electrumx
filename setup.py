@@ -15,7 +15,7 @@ setuptools.setup(
     # "groestlcoin_hash" package is required to sync Groestlcoin network.
     # "pycryptodomex" package is required to sync SmartCash network.
     install_requires=['aiorpcX>=0.10.4,<0.11', 'attrs',
-                      'plyvel', 'pylru', 'aiohttp >= 2'],
+                      'python-rocksdb', 'pylru', 'aiohttp >= 2'],
     packages=setuptools.find_packages(include=('electrumx*',)),
     description='ElectrumX Server',
     author='Neil Booth',

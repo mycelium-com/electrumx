@@ -34,8 +34,9 @@ class Env(EnvBase):
         super().__init__()
         self.obsolete(['UTXO_MB', 'HIST_MB', 'NETWORK'])
         self.db_dir = self.required('DB_DIRECTORY')
-        self.db_engine = self.default('DB_ENGINE', 'leveldb')
+        self.db_engine = self.default('DB_ENGINE', 'rocksdb')
         self.daemon_url = self.required('DAEMON_URL')
+        # self.read_only = self.default("READ_ONLY", False)
         if coin is not None:
             assert issubclass(coin, Coin)
             self.coin = coin

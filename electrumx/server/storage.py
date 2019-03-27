@@ -11,9 +11,9 @@ import os
 from functools import partial
 
 import electrumx.lib.util as util
-
-
+READ_ONLY = 1
 def db_class(name):
+    global READ_ONLY
     '''Returns a DB engine class.'''
     for db_class in util.subclasses(Storage):
         if db_class.__name__.lower() == name.lower():
@@ -85,8 +85,9 @@ class LevelDB(Storage):
         self.get = self.db.get
         self.put = self.db.put
         self.iterator = self.db.iterator
-        self.write_batch = partial(self.db.write_batch, transaction=True,
-                                   sync=True)
+        if READ_ONLY == 0:
+            self.write_batch = partial(self.db.write_batch, transaction=True,
+                                        sync=True)
 
 
 class RocksDB(Storage):
@@ -103,8 +104,9 @@ class RocksDB(Storage):
         options = self.module.Options(create_if_missing=create,
                                       use_fsync=True,
                                       target_file_size_base=33554432,
-                                      max_open_files=mof)
-        self.db = self.module.DB(name, options)
+                                      max_open_files=mof,
+                                      )
+        self.db = self.module.DB(name, options, read_only = READ_ONLY == 0)
         self.get = self.db.get
         self.put = self.db.put
 
@@ -133,7 +135,8 @@ class RocksDBWriteBatch(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if not exc_val:
-            self.db.write(self.batch)
+            if READ_ONLY == 0:
+                 self.db.write(self.batch)
 
 
 class RocksDBIterator(object):
