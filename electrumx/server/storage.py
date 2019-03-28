@@ -11,7 +11,7 @@ import os
 from functools import partial
 
 import electrumx.lib.util as util
-READ_ONLY = 1
+READ_ONLY = 0
 def db_class(name):
     global READ_ONLY
     '''Returns a DB engine class.'''

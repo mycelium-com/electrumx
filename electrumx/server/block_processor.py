@@ -655,7 +655,7 @@ class BlockProcessor(object):
         try:
             async with TaskGroup() as group:
                 await group.spawn(self.prefetcher.main_loop(self.height))
-                # await group.spawn(self._process_prefetched_blocks())
+                await group.spawn(self._process_prefetched_blocks())
         finally:
             # Shut down block processing
             self.logger.info('flushing to DB for a clean shutdown...')
