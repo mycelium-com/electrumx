@@ -106,7 +106,7 @@ class RocksDB(Storage):
                                       target_file_size_base=33554432,
                                       max_open_files=mof,
                                       )
-        self.db = self.module.DB(name, options, read_only = READ_ONLY == 0)
+        self.db = self.module.DB(name, options, read_only=(READ_ONLY == 1))
         self.get = self.db.get
         self.put = self.db.put
 
