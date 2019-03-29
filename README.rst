@@ -23,3 +23,7 @@ See `readthedocs <https://electrumx.readthedocs.io/>`_.
 
 
 1BWwXJH3q6PRsizBkSGm2Uw4Sz1urZ5sCj
+
+
+Added READ_ONLY flag to make client work on read-only mode only
+./
