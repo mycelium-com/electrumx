@@ -106,6 +106,7 @@ class RocksDB(Storage):
                                       max_open_files=mof,
                                       )
         self.db = self.module.DB(name, options, read_only = read_only)
+        self.read_only = read_only
         self.get = self.db.get
         self.put = self.db.put
 
@@ -116,7 +117,7 @@ class RocksDB(Storage):
         gc.collect()
 
     def write_batch(self):
-        return RocksDBWriteBatch(self.db)
+        return RocksDBWriteBatch(self.db, self.read_only)
 
     def iterator(self, prefix=b'', reverse=False):
         return RocksDBIterator(self.db, prefix, reverse)

@@ -27,7 +27,8 @@ from electrumx.server.db import FlushData
 class Prefetcher(object):
     '''Prefetches blocks (in the forward direction only).'''
 
-    def __init__(self, daemon, coin, blocks_event):
+    def __init__(self, daemon, coin, blocks_event,read_only):
+        self.read_only = read_only
         self.logger = class_logger(__name__, self.__class__.__name__)
         self.daemon = daemon
         self.coin = coin
@@ -158,7 +159,7 @@ class BlockProcessor(object):
 
         self.coin = env.coin
         self.blocks_event = asyncio.Event()
-        self.prefetcher = Prefetcher(daemon, env.coin, self.blocks_event)
+        self.prefetcher = Prefetcher(daemon, env.coin, self.blocks_event, self.env.read_only)
         self.logger = class_logger(__name__, self.__class__.__name__)
 
         # Meta
@@ -655,7 +656,8 @@ class BlockProcessor(object):
         try:
             async with TaskGroup() as group:
                 await group.spawn(self.prefetcher.main_loop(self.height))
-                await group.spawn(self._process_prefetched_blocks())
+                if not self.env.read_only:
+                    await group.spawn(self._process_prefetched_blocks())
         finally:
             # Shut down block processing
             self.logger.info('flushing to DB for a clean shutdown...')
