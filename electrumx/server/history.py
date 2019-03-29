@@ -32,8 +32,8 @@ class History(object):
         self.unflushed_count = 0
         self.db = None
 
-    def open_db(self, db_class, for_sync, utxo_flush_count, compacting):
-        self.db = db_class('hist', for_sync)
+    def open_db(self, db_class, for_sync, utxo_flush_count, compacting,read_only):
+        self.db = db_class('hist', for_sync,read_only)
         self.read_state()
         self.clear_excess(utxo_flush_count)
         # An incomplete compaction needs to be cancelled otherwise

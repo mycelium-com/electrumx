@@ -11,9 +11,7 @@ import os
 from functools import partial
 
 import electrumx.lib.util as util
-READ_ONLY = 0
 def db_class(name):
-    global READ_ONLY
     '''Returns a DB engine class.'''
     for db_class in util.subclasses(Storage):
         if db_class.__name__.lower() == name.lower():
@@ -25,17 +23,18 @@ def db_class(name):
 class Storage(object):
     '''Abstract base class of the DB backend abstraction.'''
 
-    def __init__(self, name, for_sync):
+    def __init__(self, name, for_sync, read_only):
         self.is_new = not os.path.exists(name)
         self.for_sync = for_sync or self.is_new
-        self.open(name, create=self.is_new)
+        self.open(name, create=self.is_new, read_only = read_only)
+
 
     @classmethod
     def import_module(cls):
         '''Import the DB engine module.'''
         raise NotImplementedError
 
-    def open(self, name, create):
+    def open(self, name, create,read_only):
         '''Open an existing database or create a new one.'''
         raise NotImplementedError
 
@@ -76,7 +75,7 @@ class LevelDB(Storage):
         import plyvel
         cls.module = plyvel
 
-    def open(self, name, create):
+    def open(self, name, create,read_only):
         mof = 512 if self.for_sync else 128
         # Use snappy compression (the default)
         self.db = self.module.DB(name, create_if_missing=create,
@@ -85,7 +84,7 @@ class LevelDB(Storage):
         self.get = self.db.get
         self.put = self.db.put
         self.iterator = self.db.iterator
-        if READ_ONLY == 0:
+        if not read_only:
             self.write_batch = partial(self.db.write_batch, transaction=True,
                                         sync=True)
 
@@ -98,7 +97,7 @@ class RocksDB(Storage):
         import rocksdb
         cls.module = rocksdb
 
-    def open(self, name, create):
+    def open(self, name, create, read_only):
         mof = 512 if self.for_sync else 128
         # Use snappy compression (the default)
         options = self.module.Options(create_if_missing=create,
@@ -106,7 +105,7 @@ class RocksDB(Storage):
                                       target_file_size_base=33554432,
                                       max_open_files=mof,
                                       )
-        self.db = self.module.DB(name, options, read_only=(READ_ONLY == 1))
+        self.db = self.module.DB(name, options, read_only = read_only)
         self.get = self.db.get
         self.put = self.db.put
 
@@ -126,16 +125,17 @@ class RocksDB(Storage):
 class RocksDBWriteBatch(object):
     '''A write batch for RocksDB.'''
 
-    def __init__(self, db):
+    def __init__(self, db, read_only):
         self.batch = RocksDB.module.WriteBatch()
         self.db = db
+        self.read_only = read_only
 
     def __enter__(self):
         return self.batch
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if not exc_val:
-            if READ_ONLY == 0:
+            if not self.read_only:
                  self.db.write(self.batch)
 
 

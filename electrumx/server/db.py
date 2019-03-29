@@ -110,7 +110,7 @@ class DB(object):
         assert self.utxo_db is None
 
         # First UTXO DB
-        self.utxo_db = self.db_class('utxo', for_sync)
+        self.utxo_db = self.db_class('utxo', for_sync,self.env.read_only)
         if self.utxo_db.is_new:
             self.logger.info('created new database')
             self.logger.info('creating metadata directory')
@@ -127,7 +127,8 @@ class DB(object):
         # Then history DB
         self.utxo_flush_count = self.history.open_db(self.db_class, for_sync,
                                                      self.utxo_flush_count,
-                                                     compacting)
+                                                     compacting,
+                                                     self.env.read_only)
         self.clear_excess_undo_info()
 
         # Read TX counts (requires meta directory)
