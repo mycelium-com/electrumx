@@ -11,6 +11,8 @@ import os
 from functools import partial
 
 import electrumx.lib.util as util
+
+
 def db_class(name):
     '''Returns a DB engine class.'''
     for db_class in util.subclasses(Storage):
@@ -18,23 +20,20 @@ def db_class(name):
             db_class.import_module()
             return db_class
     raise RuntimeError('unrecognised DB engine "{}"'.format(name))
-
-
 class Storage(object):
     '''Abstract base class of the DB backend abstraction.'''
 
     def __init__(self, name, for_sync, read_only):
         self.is_new = not os.path.exists(name)
         self.for_sync = for_sync or self.is_new
-        self.open(name, create=self.is_new, read_only = read_only)
-
+        self.open(name, create=self.is_new, read_only=read_only)
 
     @classmethod
     def import_module(cls):
         '''Import the DB engine module.'''
         raise NotImplementedError
 
-    def open(self, name, create,read_only):
+    def open(self, name, create, read_only):
         '''Open an existing database or create a new one.'''
         raise NotImplementedError
 
@@ -75,7 +74,7 @@ class LevelDB(Storage):
         import plyvel
         cls.module = plyvel
 
-    def open(self, name, create,read_only):
+    def open(self, name, create, read_only):
         mof = 512 if self.for_sync else 128
         # Use snappy compression (the default)
         self.db = self.module.DB(name, create_if_missing=create,
@@ -86,7 +85,7 @@ class LevelDB(Storage):
         self.iterator = self.db.iterator
         if not read_only:
             self.write_batch = partial(self.db.write_batch, transaction=True,
-                                        sync=True)
+                                       sync=True)
 
 
 class RocksDB(Storage):
@@ -103,9 +102,8 @@ class RocksDB(Storage):
         options = self.module.Options(create_if_missing=create,
                                       use_fsync=True,
                                       target_file_size_base=33554432,
-                                      max_open_files=mof,
-                                      )
-        self.db = self.module.DB(name, options, read_only = read_only)
+                                      max_open_files=mof)
+        self.db = self.module.DB(name, options, read_only=read_only)
         self.read_only = read_only
         self.get = self.db.get
         self.put = self.db.put
@@ -137,7 +135,7 @@ class RocksDBWriteBatch(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         if not exc_val:
             if not self.read_only:
-                 self.db.write(self.batch)
+                self.db.write(self.batch)
 
 
 class RocksDBIterator(object):
