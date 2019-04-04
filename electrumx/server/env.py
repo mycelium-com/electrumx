@@ -34,7 +34,7 @@ class Env(EnvBase):
         super().__init__()
         self.obsolete(['UTXO_MB', 'HIST_MB', 'NETWORK'])
         self.db_dir = self.required('DB_DIRECTORY')
-        self.db_engine = self.default('DB_ENGINE', 'rocksdb')
+        self.db_engine = self.default('DB_ENGINE', 'mongodb')
         self.daemon_url = self.required('DAEMON_URL')
         self.read_only = self.default('READ_ONLY', 0) == '1'
         if coin is not None:
