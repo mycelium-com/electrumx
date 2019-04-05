@@ -36,7 +36,7 @@ class Env(EnvBase):
         self.db_dir = self.required('DB_DIRECTORY')
         self.db_engine = self.default('DB_ENGINE', 'mongodb')
         self.daemon_url = self.required('DAEMON_URL')
-        self.read_only = self.default('READ_ONLY', 0) == '1'
+        self.read_only = False
         if coin is not None:
             assert issubclass(coin, Coin)
             self.coin = coin

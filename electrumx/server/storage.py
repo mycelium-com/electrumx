@@ -186,6 +186,31 @@ class LevelDB(Storage):
 #         return RocksDBIterator(self.db, prefix, reverse)
 
 
+class MongoDBWriteBatchWriter(object):
+
+    def __init__(self,db):
+        self.db = db
+    def put(self, key, value):
+        self.db.put(key,value)
+
+
+class MongoDBWriteBatch(object):
+    '''A write batch for RocksDB.'''
+
+    def __init__(self, db, read_only):
+        self.batch = MongoDBWriteBatchWriter(db)
+        self.db = db
+        self.read_only = read_only
+
+    def __enter__(self):
+        return self.batch
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if not exc_val:
+            if not self.read_only:
+                self.db.write(self.batch)
+
+
 # class RocksDBWriteBatch(object):
 #     '''A write batch for RocksDB.'''
 #
