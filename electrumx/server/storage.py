@@ -93,7 +93,7 @@ class MongoDB(Storage):
     def put(self, key, value):
         self.db.mytable.insert_one(self, {'_id': key, 'value': value})
 
-    async def write_batch(self):
+    def write_batch(self):
         self.db.mytable.insert_many(self)
 
     def iterator(self, prefix=b'', reverse=False):
