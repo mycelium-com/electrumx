@@ -124,7 +124,7 @@ class MongoDbIterator(object):
                 self.index-=1
                 return self.result[self.index]
         else:
-            if self.index>len(self.result):
+            if (self.index-1)>len(self.result) or len(self.result) == 0:
                 raise StopIteration
             else:
                 self.index+=1
