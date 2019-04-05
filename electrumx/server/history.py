@@ -48,7 +48,7 @@ class History(object):
             self.db = None
 
     def read_state(self):
-        state = await self.db.get(b'state\0\0')
+        state = self.db.get(b'state\0\0')
         if state:
             state = ast.literal_eval(state.decode())
             if not isinstance(state, dict):

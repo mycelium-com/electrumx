@@ -43,13 +43,13 @@ class Storage(object):
         '''Close an existing database.'''
         raise NotImplementedError
 
-    async def get(self, key):
+    def get(self, key):
         raise NotImplementedError
 
-    async def  put(self, key, value):
+    def  put(self, key, value):
         raise NotImplementedError
 
-    async def write_batch(self):
+    def write_batch(self):
         '''Return a context manager that provides `put` and `delete`.
 
         Changes should only be committed when the context manager
@@ -57,7 +57,7 @@ class Storage(object):
         '''
         raise NotImplementedError
 
-    async def iterator(self, prefix=b'', reverse=False):
+    def iterator(self, prefix=b'', reverse=False):
         '''Return an iterator that yields (key, value) pairs from the
         database sorted by key.
 
@@ -71,14 +71,14 @@ class Storage(object):
 class MongoDB(Storage):
     @classmethod
     def import_module(cls):
-        import motor.motor_asyncio
-        cls.motor = motor
-        cls.asyncio = motor.motor_asyncio
+        import pymongo
+        cls.mongo = pymongo
 
     def __init__(self, name, for_sync, read_only):
         super().__init__(name, for_sync, read_only)
-        self.client = self.asyncio.AsyncIOMotorClient()
-        self.db = self.client[name]
+        # self.client = self.asyncio.AsyncIOMotorClient()
+        # self.db = self.client[name]
+        self.db = self.mongo.MongoClient().database
 
     def open(self, name, create, read_only):
         pass
@@ -86,48 +86,50 @@ class MongoDB(Storage):
     def close(self):
         self.db.close()
 
-    async def get(self, key):
-        val = await self.db.find_one({'_id': key})
+    def get(self, key):
+        val = self.db.mytable.find_one({'_id': key})
         return val
 
-    async def put(self, key, value):
-        await self.db.insert_one(self, {'_id': key, "value": value})
+    def put(self, key, value):
+        self.db.mytable.insert_one(self, {'_id': key, 'value': value})
 
     async def write_batch(self):
-        self.db.insert_many(self)
+        self.db.mytable.insert_many(self)
 
     def iterator(self, prefix=b'', reverse=False):
-         MongoDbIterator(self.db, prefix, reverse)
+         return MongoDbIterator(self.db, prefix, reverse)
 
 
 class MongoDbIterator(object):
     '''An iterator for MongoDB.'''
 
     def __init__(self, db, prefix, reverse):
+
         self.prefix = prefix
-        if reverse:
-            self.iterator = reversed(db.iteritems())
-            nxt_prefix = util.increment_byte_string(prefix)
-            if nxt_prefix:
-                self.iterator.seek(nxt_prefix)
-                try:
-                    next(self.iterator)
-                except StopIteration:
-                    self.iterator.seek(nxt_prefix)
-            else:
-                self.iterator.seek_to_last()
+        self.result = db.mytable.find({'_id': prefix})
+        self.reverse = reverse
+        if (reverse):
+            self.index = len(self.result)
         else:
-            self.iterator = db.iteritems()
-            self.iterator.seek(prefix)
+            self.index = 0
 
     def __iter__(self):
         return self
 
     def __next__(self):
-        k, v = next(self.iterator)
-        if not k.startswith(self.prefix):
-            raise StopIteration
-        return k, v
+        if self.reverse:
+            if self.index<0:
+                raise StopIteration
+            else:
+                self.index-=1
+                return self.result[self.index]
+        else:
+            if self.index>len(self.result):
+                raise StopIteration
+            else:
+                self.index+=1
+                return self.result[self.index]
+
 
 class LevelDB(Storage):
     '''LevelDB database engine.'''
@@ -201,31 +203,32 @@ class LevelDB(Storage):
 #                 self.db.write(self.batch)
 #
 #
-class RocksDBIterator(object):
-    '''An iterator for RocksDB.'''
-
-    def __init__(self, db, prefix, reverse):
-        self.prefix = prefix
-        if reverse:
-            self.iterator = reversed(db.iteritems())
-            nxt_prefix = util.increment_byte_string(prefix)
-            if nxt_prefix:
-                self.iterator.seek(nxt_prefix)
-                try:
-                    next(self.iterator)
-                except StopIteration:
-                    self.iterator.seek(nxt_prefix)
-            else:
-                self.iterator.seek_to_last()
-        else:
-            self.iterator = db.iteritems()
-            self.iterator.seek(prefix)
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        k, v = next(self.iterator)
-        if not k.startswith(self.prefix):
-            raise StopIteration
-        return k, v
+#
+# class RocksDBIterator(object):
+#     '''An iterator for RocksDB.'''
+#
+#     def __init__(self, db, prefix, reverse):
+#         self.prefix = prefix
+#         if reverse:
+#             self.iterator = reversed(db.iteritems())
+#             nxt_prefix = util.increment_byte_string(prefix)
+#             if nxt_prefix:
+#                 self.iterator.seek(nxt_prefix)
+#                 try:
+#                     next(self.iterator)
+#                 except StopIteration:
+#                     self.iterator.seek(nxt_prefix)
+#             else:
+#                 self.iterator.seek_to_last()
+#         else:
+#             self.iterator = db.iteritems()
+#             self.iterator.seek(prefix)
+#
+#     def __iter__(self):
+#         return self
+#
+#     def __next__(self):
+#         k, v = next(self.iterator)
+#         if not k.startswith(self.prefix):
+#             raise StopIteration
+#         return k, v

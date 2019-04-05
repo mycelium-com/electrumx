@@ -332,7 +332,7 @@ class DB(object):
 
         self.backup_fs(flush_data.height, flush_data.tx_count)
         self.history.backup(touched, flush_data.tx_count)
-        with await self.utxo_db.write_batch() as batch:
+        with self.utxo_db.write_batch() as batch:
             self.flush_utxo_db(batch, flush_data)
             # Flush state last as it reads the wall time.
             self.flush_state(batch)
@@ -521,8 +521,8 @@ class DB(object):
 
     # -- UTXO database
 
-    async def read_utxo_state(self):
-        state = await self.utxo_db.get(b'state')
+    def read_utxo_state(self):
+        state = self.utxo_db.get(b'state')
         if not state:
             self.db_height = -1
             self.db_tx_count = 0
