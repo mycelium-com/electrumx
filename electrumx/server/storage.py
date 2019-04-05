@@ -106,7 +106,7 @@ class MongoDbIterator(object):
     def __init__(self, db, prefix, reverse):
 
         self.prefix = prefix
-        self.result = list(db.mytable.find({'_id': prefix}))
+        self.result = list(db.mytable.find({'_id': {'$regex':'^'+str(prefix)}}))
         self.reverse = reverse
         if reverse:
             self.index = len(self.result)
