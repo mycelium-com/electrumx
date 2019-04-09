@@ -76,8 +76,7 @@ class MongoDB(Storage):
 
     def __init__(self, name, for_sync, read_only):
         super().__init__(name, for_sync, read_only)
-        # self.client = self.asyncio.AsyncIOMotorClient()
-        # self.db = self.client[name]
+        self.read_only = read_only
         self.db = self.mongo.MongoClient().database
 
     def open(self, name, create, read_only):
@@ -88,13 +87,15 @@ class MongoDB(Storage):
 
     def get(self, key):
         val = self.db.mytable.find_one({'_id': key})
-        return val
+        if val is None:
+            return None
+        return val["value"]
 
     def put(self, key, value):
-        self.db.mytable.insert_one(self, {'_id': key, 'value': value})
+        self.db.mytable.insert_one({'_id': key, 'value': value})
 
     def write_batch(self):
-        self.db.mytable.insert_many(self)
+        return MongoDBWriteBatch(self.db, self.read_only)
 
     def iterator(self, prefix=b'', reverse=False):
          return MongoDbIterator(self.db, prefix, reverse)
@@ -190,9 +191,9 @@ class MongoDBWriteBatchWriter(object):
 
     def __init__(self,db):
         self.db = db
-    def put(self, key, value):
-        self.db.put(key,value)
 
+    def put(self, key, value):
+        self.db.mytable.insert_one({'_id': key, 'value': value})
 
 class MongoDBWriteBatch(object):
     '''A write batch for RocksDB.'''
@@ -206,9 +207,10 @@ class MongoDBWriteBatch(object):
         return self.batch
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if not exc_val:
-            if not self.read_only:
-                self.db.write(self.batch)
+        pass
+        # if not exc_val:
+        #     if not self.read_only:
+        #         self.db.mytable.insert_many(self.batch)
 
 
 # class RocksDBWriteBatch(object):
