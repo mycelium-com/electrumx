@@ -46,7 +46,7 @@ class Storage(object):
     def get(self, key):
         raise NotImplementedError
 
-    def  put(self, key, value):
+    def put(self, key, value):
         raise NotImplementedError
 
     def write_batch(self):
@@ -92,13 +92,13 @@ class MongoDB(Storage):
         return val["value"]
 
     def put(self, key, value):
-        self.db.mytable.insert_one({'_id': key, 'value': value})
+        self.result = self.db.mytable.replace_one({'_id': key}, {'value': value})
 
     def write_batch(self):
         return MongoDBWriteBatch(self.db, self.read_only)
 
     def iterator(self, prefix=b'', reverse=False):
-         return MongoDbIterator(self.db, prefix, reverse)
+        return MongoDbIterator(self.db, prefix, reverse)
 
 
 class MongoDbIterator(object):
@@ -107,7 +107,7 @@ class MongoDbIterator(object):
     def __init__(self, db, prefix, reverse):
 
         self.prefix = prefix
-        self.result = list(db.mytable.find({'_id': {'$regex':'^'+str(prefix)}}))
+        self.result = list(db.mytable.find({'_id': {'$regex': '^' + str(prefix)}}))
         self.reverse = reverse
         if reverse:
             self.index = len(self.result)
@@ -119,16 +119,16 @@ class MongoDbIterator(object):
 
     def __next__(self):
         if self.reverse:
-            if self.index<0:
+            if self.index < 0:
                 raise StopIteration
             else:
-                self.index-=1
+                self.index -= 1
                 return self.result[self.index]
         else:
-            if (self.index-1)>len(self.result) or len(self.result) == 0:
+            if (self.index - 1) > len(self.result) or len(self.result) == 0:
                 raise StopIteration
             else:
-                self.index+=1
+                self.index += 1
                 return self.result[self.index]
 
 
@@ -189,11 +189,15 @@ class LevelDB(Storage):
 
 class MongoDBWriteBatchWriter(object):
 
-    def __init__(self,db):
+    def __init__(self, db):
         self.db = db
 
     def put(self, key, value):
-        self.db.mytable.insert_one({'_id': key, 'value': value})
+        self.result = self.db.mytable.replace_one({'_id': key}, {'value': value})
+
+    def delete(self,key):
+        self.db.mytable.delete_one({'_id': key})
+
 
 class MongoDBWriteBatch(object):
     '''A write batch for RocksDB.'''
@@ -211,7 +215,6 @@ class MongoDBWriteBatch(object):
         # if not exc_val:
         #     if not self.read_only:
         #         self.db.mytable.insert_many(self.batch)
-
 
 # class RocksDBWriteBatch(object):
 #     '''A write batch for RocksDB.'''

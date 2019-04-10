@@ -114,7 +114,8 @@ class DB(object):
         if self.utxo_db.is_new:
             self.logger.info('created new database')
             self.logger.info('creating metadata directory')
-            os.mkdir('meta')
+            if not os.path.isdir('meta'):
+                os.mkdir('meta')
             with util.open_file('COIN', create=True) as f:
                 f.write(f'ElectrumX databases and metadata for '
                         f'{self.coin.NAME} {self.coin.NET}'.encode())
@@ -200,6 +201,8 @@ class DB(object):
         # Then history
         self.flush_history()
 
+        self.logger.info("starting write to db...")
+
         # Flush state last as it reads the wall time.
         with self.utxo_db.write_batch() as batch:
             if flush_utxos:
@@ -209,6 +212,8 @@ class DB(object):
         # Update and put the wall time again - otherwise we drop the
         # time it took to commit the batch
         self.flush_state(self.utxo_db)
+
+        self.logger.info("finished write to db")
 
         elapsed = self.last_flush - start_time
         self.logger.info(f'flush #{self.history.flush_count:,d} took '
