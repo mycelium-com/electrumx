@@ -9,6 +9,7 @@
 
 import os
 from functools import partial
+import re
 
 import electrumx.lib.util as util
 
@@ -92,7 +93,7 @@ class MongoDB(Storage):
         return val["value"]
 
     def put(self, key, value):
-        self.result = self.db.mytable.replace_one({'_id': key}, {'_id': key, 'value': value})
+        self.result = self.db.mytable.replace_one({'_id':  re.escape(str(key))}, {'_id':  re.escape(str(key)), 'value': re.escape(str(value))},upsert=True)
 
     def write_batch(self):
         return MongoDBWriteBatch(self.db, self.read_only)
@@ -110,7 +111,9 @@ class MongoDbIterator(object):
     def __init__(self, db, prefix, reverse):
 
         self.prefix = prefix
-        self.result = list(db.mytable.find({'_id': {'$regex': '^' + str(prefix)}}))
+
+        # db.mytable.find({"_id": {'$regex': "^" + "b\\'abc\\'"}})
+        self.result = list(db.mytable.find({"_id": {"$regex": "^" + re.escape(str(prefix))}}))
         self.reverse = reverse
         if reverse:
             self.index = len(self.result)
