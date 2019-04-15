@@ -209,7 +209,7 @@ def test_DONATION_ADDRESS():
 
 
 def test_DB_ENGINE():
-    assert_default('DB_ENGINE', 'db_engine', 'leveldb')
+    assert_default('DB_ENGINE', 'db_engine', 'mongodb')
 
 
 def test_MAX_SEND():

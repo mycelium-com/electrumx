@@ -92,13 +92,16 @@ class MongoDB(Storage):
         return val["value"]
 
     def put(self, key, value):
-        self.result = self.db.mytable.replace_one({'_id': key}, {'value': value})
+        self.result = self.db.mytable.replace_one({'_id': key}, {'_id': key, 'value': value})
 
     def write_batch(self):
         return MongoDBWriteBatch(self.db, self.read_only)
 
     def iterator(self, prefix=b'', reverse=False):
         return MongoDbIterator(self.db, prefix, reverse)
+
+    def close(self):
+        pass
 
 
 class MongoDbIterator(object):
@@ -118,40 +121,41 @@ class MongoDbIterator(object):
         return self
 
     def __next__(self):
+
         if self.reverse:
-            if self.index < 0:
+            if self.index <= 0:
                 raise StopIteration
             else:
                 self.index -= 1
-                return self.result[self.index]
+                return self.result[self.index+1]
         else:
-            if (self.index - 1) > len(self.result) or len(self.result) == 0:
+            if (self.index) >= len(self.result) or len(self.result) == 0:
                 raise StopIteration
             else:
                 self.index += 1
-                return self.result[self.index]
+                return self.result[self.index-1]
 
 
-class LevelDB(Storage):
-    '''LevelDB database engine.'''
-
-    @classmethod
-    def import_module(cls):
-        import plyvel
-        cls.module = plyvel
-
-    def open(self, name, create, read_only):
-        mof = 512 if self.for_sync else 128
-        # Use snappy compression (the default)
-        self.db = self.module.DB(name, create_if_missing=create,
-                                 max_open_files=mof)
-        self.close = self.db.close
-        self.get = self.db.get
-        self.put = self.db.put
-        self.iterator = self.db.iterator
-        if not read_only:
-            self.write_batch = partial(self.db.write_batch, transaction=True,
-                                       sync=True)
+# class LevelDB(Storage):
+#     '''LevelDB database engine.'''
+#
+#     @classmethod
+#     def import_module(cls):
+#         import plyvel
+#         cls.module = plyvel
+#
+#     def open(self, name, create, read_only):
+#         mof = 512 if self.for_sync else 128
+#         # Use snappy compression (the default)
+#         self.db = self.module.DB(name, create_if_missing=create,
+#                                  max_open_files=mof)
+#         self.close = self.db.close
+#         self.get = self.db.get
+#         self.put = self.db.put
+#         self.iterator = self.db.iterator
+#         if not read_only:
+#             self.write_batch = partial(self.db.write_batch, transaction=True,
+#                                        sync=True)
 
 
 # class RocksDB(Storage):
