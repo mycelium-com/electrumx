@@ -93,7 +93,7 @@ class MongoDB(Storage):
         return val["value"]
 
     def put(self, key, value):
-        self.result = self.db.mytable.replace_one({'_id':  re.escape(str(key))}, {'_id':  re.escape(str(key)), 'value': re.escape(str(value))},upsert=True)
+        self.result = self.db.mytable.replace_one({'_id':  str(key,"utf-8")}, {'_id':  str(key,"utf-8"), 'value': str(value,"utf-8")},upsert=True)
 
     def write_batch(self):
         return MongoDBWriteBatch(self.db, self.read_only)
@@ -112,8 +112,8 @@ class MongoDbIterator(object):
 
         self.prefix = prefix
 
-        # db.mytable.find({"_id": {'$regex': "^" + "b\\'abc\\'"}})
-        self.result = list(db.mytable.find({"_id": {"$regex": "^" + re.escape(str(prefix))}}))
+        # db.mytable.find({"_id": {'$regex': "^" + "b\\'abc"}})
+        self.result = list(db.mytable.find({"_id": {'$regex': "^" + str(prefix,"utf-8")}}))
         self.reverse = reverse
         if reverse:
             self.index = len(self.result)
@@ -130,14 +130,15 @@ class MongoDbIterator(object):
                 raise StopIteration
             else:
                 self.index -= 1
-                return self.result[self.index+1]
+                l = self.result[self.index+1]
+                return bytes(l['_id'],'utf-8'), bytes(l['value'],'utf-8')
         else:
             if (self.index) >= len(self.result) or len(self.result) == 0:
                 raise StopIteration
             else:
                 self.index += 1
-                return self.result[self.index-1]
-
+                l = self.result[self.index-1]
+                return bytes(l['_id'],'utf-8'), bytes(l['value'],'utf-8')
 
 # class LevelDB(Storage):
 #     '''LevelDB database engine.'''

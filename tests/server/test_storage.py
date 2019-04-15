@@ -44,24 +44,13 @@ def test_iterator(db):
     The iterator should contain all key/value pairs starting with prefix
     ordered by key.
     """
-    # for i in range(5):
-    #     db.put(b"abc" + str.encode(str(i)), str.encode(str(i)))
-    # db.put("babc", "b")
-    # db.put(b"a", b"xyz")
-    # db.put(b"abd", b"x")
-    # assert list(db.iterator(prefix="babc")) == [{'_id': 'babc', 'value': 'b'}] \
-    #        + [
-    #     (b"abc" + str.encode(str(i)), str.encode(str(i))) for
-    #         i in range(5)
-    # ]
-
     for i in range(5):
         db.put(b"abc" + str.encode(str(i)), str.encode(str(i)))
     db.put(b"abc", b"")
     db.put(b"a", b"xyz")
     db.put(b"abd", b"x")
-    assert list(db.iterator(prefix=b"abc")) == [(b"abc", b"")] + [
-        (b"abc" + str.encode(str(i)), str.encode(str(i))) for
+    assert list(db.iterator(prefix=b"abc")) == [(b'abc', b'')] + [
+        (b'abc' + str.encode(str(i)), str.encode(str(i))) for
         i in range(5)
     ]
 
