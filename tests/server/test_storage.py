@@ -35,8 +35,7 @@ def test_batch(db):
     db.put(b"a", b"1")
     with db.write_batch() as b:
         b.put(b"a", b"2")
-        #todo we perform it immediately
-        #assert db.get(b"a") == b"1"
+        assert db.get(b"a") == b"1"
     assert db.get(b"a") == b"2"
 
 

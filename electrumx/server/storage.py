@@ -10,6 +10,7 @@
 import os
 from functools import partial
 import re
+from pymongo import InsertOne, DeleteMany, ReplaceOne, UpdateOne, DeleteOne
 
 import electrumx.lib.util as util
 
@@ -111,8 +112,6 @@ class MongoDbIterator(object):
     def __init__(self, db, prefix, reverse):
 
         self.prefix = prefix
-
-        # db.mytable.find({"_id": {'$regex': "^" + "b\\'abc"}})
         self.result = list(db.mytable.find({"_id": {'$regex': "^" + str(prefix,"utf-8")}}))
         self.reverse = reverse
         if reverse:
@@ -199,14 +198,15 @@ class MongoDBWriteBatchWriter(object):
 
     def __init__(self, db):
         self.db = db
+        self.result = []
+
 
     def put(self, key, value):
-        # self.result = self.db.mytable.replace_one({'_id': key}, {'value': value})
-        self.result = self.db.mytable.replace_one({'_id': str(key, "utf-8")},
-                                                  {'_id': str(key, "utf-8"), 'value': str(value, "utf-8")}, upsert=True)
+        self.result.append(UpdateOne({'_id': str(key, "utf-8")}, {'$set': {'_id': str(key, "utf-8"), 'value': str(value, "utf-8")}}, upsert=True))
 
     def delete(self,key):
-        self.db.mytable.delete_one({'_id': key})
+        self.result.append(DeleteOne({'_id': key}))
+
 
 
 class MongoDBWriteBatch(object):
@@ -221,10 +221,11 @@ class MongoDBWriteBatch(object):
         return self.batch
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        pass
-        # if not exc_val:
-        #     if not self.read_only:
-        #         self.db.mytable.insert_many(self.batch)
+        # pass
+        if not exc_val:
+            if not self.read_only:
+                self.result = self.db.mytable.bulk_write(self.batch.result)
+                self.batch.result.clear()
 
 # class RocksDBWriteBatch(object):
 #     '''A write batch for RocksDB.'''
