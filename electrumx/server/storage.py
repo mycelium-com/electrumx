@@ -87,10 +87,10 @@ class MongoDB(Storage):
         self.db.close()
 
     def get(self, key):
-        val = self.db.mytable.find_one({'_id': key})
+        val = self.db.mytable.find_one({'_id':  str(key,"utf-8")})
         if val is None:
             return None
-        return val["value"]
+        return bytes(val['value'],'utf-8')
 
     def put(self, key, value):
         self.result = self.db.mytable.replace_one({'_id':  str(key,"utf-8")}, {'_id':  str(key,"utf-8"), 'value': str(value,"utf-8")},upsert=True)
