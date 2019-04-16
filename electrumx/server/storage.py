@@ -116,7 +116,7 @@ class MongoDbIterator(object):
         self.result = list(db.mytable.find({"_id": {'$regex': "^" + str(prefix,"utf-8")}}))
         self.reverse = reverse
         if reverse:
-            self.index = len(self.result)
+            self.index = len(self.result)-1
         else:
             self.index = 0
 
@@ -201,7 +201,9 @@ class MongoDBWriteBatchWriter(object):
         self.db = db
 
     def put(self, key, value):
-        self.result = self.db.mytable.replace_one({'_id': key}, {'value': value})
+        # self.result = self.db.mytable.replace_one({'_id': key}, {'value': value})
+        self.result = self.db.mytable.replace_one({'_id': str(key, "utf-8")},
+                                                  {'_id': str(key, "utf-8"), 'value': str(value, "utf-8")}, upsert=True)
 
     def delete(self,key):
         self.db.mytable.delete_one({'_id': key})
