@@ -88,13 +88,13 @@ class MongoDB(Storage):
         self.db.close()
 
     def get(self, key):
-        val = self.db.mytable.find_one({'_id':  str(key,"utf-8")})
+        val = self.db.mytable.find_one({'_id':  str(key,"ISO-8859-1")})
         if val is None:
             return None
-        return bytes(val['value'],'utf-8')
+        return bytes(val['value'],'ISO-8859-1')
 
     def put(self, key, value):
-        self.result = self.db.mytable.replace_one({'_id':  str(key,"utf-8")}, {'_id':  str(key,"utf-8"), 'value': str(value,"utf-8")},upsert=True)
+        self.result = self.db.mytable.replace_one({'_id':  str(key,"ISO-8859-1")}, {'_id':  str(key,"ISO-8859-1"), 'value': str(value,"ISO-8859-1")},upsert=True)
 
     def write_batch(self):
         return MongoDBWriteBatch(self.db, self.read_only)
@@ -112,7 +112,7 @@ class MongoDbIterator(object):
     def __init__(self, db, prefix, reverse):
 
         self.prefix = prefix
-        self.result = list(db.mytable.find({"_id": {'$regex': "^" + str(prefix,"utf-8")}}))
+        self.result = list(db.mytable.find({"_id": {'$regex': "^" + str(prefix,"ISO-8859-1")}}))
         self.reverse = reverse
         if reverse:
             self.index = len(self.result)-1
@@ -130,14 +130,14 @@ class MongoDbIterator(object):
             else:
                 self.index -= 1
                 l = self.result[self.index+1]
-                return bytes(l['_id'],'utf-8'), bytes(l['value'],'utf-8')
+                return bytes(l['_id'],'ISO-8859-1'), bytes(l['value'],'ISO-8859-1')
         else:
             if (self.index) >= len(self.result) or len(self.result) == 0:
                 raise StopIteration
             else:
                 self.index += 1
                 l = self.result[self.index-1]
-                return bytes(l['_id'],'utf-8'), bytes(l['value'],'utf-8')
+                return bytes(l['_id'],'ISO-8859-1'), bytes(l['value'],'ISO-8859-1')
 
 # class LevelDB(Storage):
 #     '''LevelDB database engine.'''
@@ -202,7 +202,7 @@ class MongoDBWriteBatchWriter(object):
 
 
     def put(self, key, value):
-        self.result.append(UpdateOne({'_id': str(key, "utf-8")}, {'$set': {'_id': str(key, "utf-8"), 'value': str(value, "utf-8")}}, upsert=True))
+        self.result.append(UpdateOne({'_id': str(key, "ISO-8859-1")}, {'$set': {'_id': str(key, "ISO-8859-1"), 'value': str(value, "ISO-8859-1")}}, upsert=True))
 
     def delete(self,key):
         self.result.append(DeleteOne({'_id': key}))
