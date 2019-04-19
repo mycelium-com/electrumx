@@ -89,13 +89,13 @@ class MongoDB(Storage):
         self.db.close()
 
     def get(self, key):
-        val = self.db.mytable.find_one({'_id':  base64.b64encode(key)})
+        val = self.db.mytable.find_one({'_id':  str(base64.b64encode(key),"utf-8")})
         if val is None:
             return None
         return bytes(base64.b64decode(val['value']))
 
     def put(self, key, value):
-        self.result = self.db.mytable.replace_one({'_id':  base64.b64encode(key)}, {'_id':  base64.b64encode(key), 'value': base64.b64encode(value)},upsert=True)
+        self.result = self.db.mytable.replace_one({'_id':  str(base64.b64encode(key),'utf-8')}, {'_id':  str(base64.b64encode(key),'utf-8'), 'value': str(base64.b64encode(value),'utf-8')},upsert=True)
 
     def write_batch(self):
         return MongoDBWriteBatch(self.db, self.read_only)
