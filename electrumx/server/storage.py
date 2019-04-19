@@ -10,6 +10,7 @@
 import os
 from functools import partial
 import re
+import base64
 from pymongo import InsertOne, DeleteMany, ReplaceOne, UpdateOne, DeleteOne
 
 import electrumx.lib.util as util
@@ -88,13 +89,13 @@ class MongoDB(Storage):
         self.db.close()
 
     def get(self, key):
-        val = self.db.mytable.find_one({'_id':  str(key,"ISO-8859-1")})
+        val = self.db.mytable.find_one({'_id':  base64.b64encode(key)})
         if val is None:
             return None
-        return bytes(val['value'],'ISO-8859-1')
+        return bytes(base64.b64decode(val['value']))
 
     def put(self, key, value):
-        self.result = self.db.mytable.replace_one({'_id':  str(key,"ISO-8859-1")}, {'_id':  str(key,"ISO-8859-1"), 'value': str(value,"ISO-8859-1")},upsert=True)
+        self.result = self.db.mytable.replace_one({'_id':  base64.b64encode(key)}, {'_id':  base64.b64encode(key), 'value': base64.b64encode(value)},upsert=True)
 
     def write_batch(self):
         return MongoDBWriteBatch(self.db, self.read_only)
@@ -112,7 +113,7 @@ class MongoDbIterator(object):
     def __init__(self, db, prefix, reverse):
 
         self.prefix = prefix
-        self.result = list(db.mytable.find({"_id": {'$regex': "^" + str(prefix,"ISO-8859-1")}}))
+        self.result = list(db.mytable.find({"_id": {'$regex': "^" + str(base64.b64encode(prefix),'utf-8')}}))
         self.reverse = reverse
         if reverse:
             self.index = len(self.result)-1
@@ -130,14 +131,14 @@ class MongoDbIterator(object):
             else:
                 self.index -= 1
                 l = self.result[self.index+1]
-                return bytes(l['_id'],'ISO-8859-1'), bytes(l['value'],'ISO-8859-1')
+                return bytes(base64.b64decode(l['_id'])), bytes(base64.b64decode(l['value']))
         else:
             if (self.index) >= len(self.result) or len(self.result) == 0:
                 raise StopIteration
             else:
                 self.index += 1
                 l = self.result[self.index-1]
-                return bytes(l['_id'],'ISO-8859-1'), bytes(l['value'],'ISO-8859-1')
+                return bytes(base64.b64decode(l['_id'])), bytes(base64.b64decode(l['value']))
 
 # class LevelDB(Storage):
 #     '''LevelDB database engine.'''
@@ -202,10 +203,10 @@ class MongoDBWriteBatchWriter(object):
 
 
     def put(self, key, value):
-        self.result.append(UpdateOne({'_id': str(key, "ISO-8859-1")}, {'$set': {'_id': str(key, "ISO-8859-1"), 'value': str(value, "ISO-8859-1")}}, upsert=True))
+        self.result.append(UpdateOne({'_id': str(base64.b64encode(key),'utf-8')}, {'$set': {'_id': str(base64.b64encode(key),'utf-8'), 'value': str(base64.b64encode(value),'utf-8')}}, upsert=True))
 
     def delete(self,key):
-        self.result.append(DeleteOne({'_id': key}))
+        self.result.append(DeleteOne({'_id': str(base64.b64encode(key),'utf-8')}))
 
 
 
