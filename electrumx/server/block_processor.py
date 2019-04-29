@@ -380,6 +380,10 @@ class BlockProcessor(object):
         height = self.height
 
         for block in blocks:
+
+            if (height % 100) == 0:
+                print("Advance block height=" + str(height))
+
             height += 1
             undo_info = self.advance_txs(block.transactions)
             if height >= min_height:
