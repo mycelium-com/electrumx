@@ -86,6 +86,7 @@ class Coin(object):
     DECODE_CHECK = Base58.decode_check
     GENESIS_HASH = ('000000000019d6689c085ae165831e93'
                     '4ff763ae46a2a6c172b3f1b60a8ce26f')
+    GENESIS_ACTIVATION = 100_000_000
     # Peer discovery
     PEER_DEFAULT_PORTS = {'t': '50001', 's': '50002'}
     PEERS = []
@@ -125,6 +126,12 @@ class Coin(object):
         return url + '/'
 
     @classmethod
+    def max_fetch_blocks(cls, height):
+        if height < 130000:
+            return 1000
+        return 100
+
+    @classmethod
     def genesis_block(cls, block):
         '''Check the Genesis block is the right one for this coin.
 
@@ -140,13 +147,7 @@ class Coin(object):
 
     @classmethod
     def hashX_from_script(cls, script):
-        '''Returns a hashX from a script, or None if the script is provably
-        unspendable so the output can be dropped.
-        '''
-        prefix = script[:2]
-        # Match a prefix of OP_RETURN or (OP_FALSE, OP_RETURN)
-        if prefix == b'\x00\x6a' or (prefix and prefix[0] == 0x6a):
-            return None
+        '''Returns a hashX from a script.'''
         return sha256(script).digest()[:HASHX_LEN]
 
     @staticmethod
@@ -344,6 +345,92 @@ class BitcoinMixin(object):
 
 
 class NameMixin(object):
+    DATA_PUSH_MULTIPLE = -2
+
+    @classmethod
+    def interpret_name_prefix(cls, script, possible_ops):
+        """Interprets a potential name prefix
+
+        Checks if the given script has a name prefix.  If it has, the
+        name prefix is split off the actual address script, and its parsed
+        fields (e.g. the name) returned.
+
+        possible_ops must be an array of arrays, defining the structures
+        of name prefixes to look out for.  Each array can consist of
+        actual opcodes, -1 for ignored data placeholders, -2 for
+        multiple ignored data placeholders and strings for named placeholders.
+        Whenever a data push matches a named placeholder,
+        the corresponding value is put into a dictionary the placeholder name
+        as key, and the dictionary of matches is returned."""
+
+        try:
+            ops = Script.get_ops(script)
+        except ScriptError:
+            return None, script
+
+        name_op_count = None
+        for pops in possible_ops:
+            # Start by translating named placeholders to -1 values, and
+            # keeping track of which op they corresponded to.
+            template = []
+            named_index = {}
+
+            n = len(pops)
+            offset = 0
+            for i, op in enumerate(pops):
+                if op == cls.DATA_PUSH_MULTIPLE:
+                    # Emercoin stores value in multiple placeholders
+                    # Script structure: https://git.io/fjuRu
+                    added, template = cls._add_data_placeholders_to_template(ops[i:], template)
+                    offset += added - 1  # subtract the "DATA_PUSH_MULTIPLE" opcode
+                elif type(op) == str:
+                    template.append(-1)
+                    named_index[op] = i + offset
+                else:
+                    template.append(op)
+            n += offset
+
+            if not _match_ops(ops[:n], template):
+                continue
+
+            name_op_count = n
+            named_values = {key: ops[named_index[key]] for key in named_index}
+            break
+
+        if name_op_count is None:
+            return None, script
+
+        name_end_pos = cls.find_end_position_of_name(script, name_op_count)
+
+        address_script = script[name_end_pos:]
+        return named_values, address_script
+
+    @classmethod
+    def _add_data_placeholders_to_template(cls, opcodes, template):
+        num_dp = cls._read_data_placeholders_count(opcodes)
+        num_2drop = num_dp // 2
+        num_drop = num_dp % 2
+
+        two_drops = [OpCodes.OP_2DROP for _ in range(num_2drop)]
+        one_drops = [OpCodes.OP_DROP for _ in range(num_drop)]
+
+        elements_added = num_dp + num_2drop + num_drop
+        placeholders = [-1 for _ in range(num_dp)]
+        drops = two_drops + one_drops
+
+        return elements_added, template + placeholders + drops
+
+    @classmethod
+    def _read_data_placeholders_count(cls, opcodes):
+        data_placeholders = 0
+
+        for opcode in opcodes:
+            if type(opcode) == tuple:
+                data_placeholders += 1
+            else:
+                break
+
+        return data_placeholders
 
     @staticmethod
     def find_end_position_of_name(script, length):
@@ -375,56 +462,6 @@ class NameMixin(object):
                 n += dlen
 
         return n
-
-    @classmethod
-    def interpret_name_prefix(cls, script, possible_ops):
-        """Interprets a potential name prefix
-
-        Checks if the given script has a name prefix.  If it has, the
-        name prefix is split off the actual address script, and its parsed
-        fields (e.g. the name) returned.
-
-        possible_ops must be an array of arrays, defining the structures
-        of name prefixes to look out for.  Each array can consist of
-        actual opcodes, -1 for ignored data placeholders and strings for
-        named placeholders.  Whenever a data push matches a named placeholder,
-        the corresponding value is put into a dictionary the placeholder name
-        as key, and the dictionary of matches is returned."""
-
-        try:
-            ops = Script.get_ops(script)
-        except ScriptError:
-            return None, script
-
-        name_op_count = None
-        for pops in possible_ops:
-            n = len(pops)
-
-            # Start by translating named placeholders to -1 values, and
-            # keeping track of which op they corresponded to.
-            template = []
-            named_index = {}
-            for i in range(n):
-                if type(pops[i]) == str:
-                    template.append(-1)
-                    named_index[pops[i]] = i
-                else:
-                    template.append(pops[i])
-
-            if not _match_ops(ops[:n], template):
-                continue
-
-            name_op_count = n
-            named_values = {key: ops[named_index[key]] for key in named_index}
-            break
-
-        if name_op_count is None:
-            return None, script
-
-        name_end_pos = cls.find_end_position_of_name(script, name_op_count)
-
-        address_script = script[name_end_pos:]
-        return named_values, address_script
 
 
 class NameIndexMixin(NameMixin):
@@ -507,6 +544,7 @@ class BitcoinSV(BitcoinMixin, Coin):
         'sv.jochen-hoenicke.de s t',
         'sv.satoshi.io s t',
     ]
+    GENESIS_ACTIVATION = 620_538
 
 
 class BitcoinCash(BitcoinMixin, Coin):
@@ -672,6 +710,24 @@ class Emercoin(NameMixin, Coin):
 
     PEERS = []
 
+    # Name opcodes
+    OP_NAME_NEW = OpCodes.OP_1
+    OP_NAME_UPDATE = OpCodes.OP_2
+    OP_NAME_DELETE = OpCodes.OP_3
+
+    # Valid name prefixes.
+    NAME_NEW_OPS = [OP_NAME_NEW, OpCodes.OP_DROP, "name", "days",
+                    OpCodes.OP_2DROP, NameMixin.DATA_PUSH_MULTIPLE]
+    NAME_UPDATE_OPS = [OP_NAME_UPDATE, OpCodes.OP_DROP, "name", "days",
+                       OpCodes.OP_2DROP, NameMixin.DATA_PUSH_MULTIPLE]
+    NAME_DELETE_OPS = [OP_NAME_DELETE, OpCodes.OP_DROP, "name",
+                       OpCodes.OP_DROP]
+    NAME_OPERATIONS = [
+        NAME_NEW_OPS,
+        NAME_UPDATE_OPS,
+        NAME_DELETE_OPS,
+    ]
+
     @classmethod
     def block_header(cls, block, height):
         '''Returns the block header given a block and its height.'''
@@ -688,34 +744,9 @@ class Emercoin(NameMixin, Coin):
 
     @classmethod
     def hashX_from_script(cls, script):
-        address_script = cls.address_script_from_script(script)
+        _, address_script = cls.interpret_name_prefix(script, cls.NAME_OPERATIONS)
 
         return super().hashX_from_script(address_script)
-
-    @classmethod
-    def address_script_from_script(cls, script):
-        # Name opcodes
-        OP_NAME_NEW = OpCodes.OP_1
-        OP_NAME_UPDATE = OpCodes.OP_2
-        OP_NAME_DELETE = OpCodes.OP_3
-
-        # Opcode sequences for name operations
-        # Script structure: https://git.io/fjuRu
-        NAME_NEW_OPS = [OP_NAME_NEW, OpCodes.OP_DROP, -1, -1,
-                        OpCodes.OP_2DROP, -1, OpCodes.OP_DROP]
-        NAME_UPDATE_OPS = [OP_NAME_UPDATE, OpCodes.OP_DROP, -1, -1,
-                           OpCodes.OP_2DROP, -1, OpCodes.OP_DROP]
-        NAME_DELETE_OPS = [OP_NAME_DELETE, OpCodes.OP_DROP, -1,
-                           OpCodes.OP_DROP]
-
-        ops = [
-            NAME_NEW_OPS,
-            NAME_UPDATE_OPS,
-            NAME_DELETE_OPS,
-        ]
-
-        _, address_script = cls.interpret_name_prefix(script, ops)
-        return address_script
 
 
 class BitcoinTestnetMixin(object):
@@ -742,6 +773,7 @@ class BitcoinSVTestnet(BitcoinTestnetMixin, Coin):
     PEERS = [
         'electrontest.cascharia.com t51001 s51002',
     ]
+    GENESIS_ACTIVATION = 1_344_302
 
 
 class BitcoinSVScalingTestnet(BitcoinSVTestnet):
@@ -752,6 +784,13 @@ class BitcoinSVScalingTestnet(BitcoinSVTestnet):
     TX_COUNT = 2015
     TX_COUNT_HEIGHT = 5711
     TX_PER_BLOCK = 5000
+    GENESIS_ACTIVATION = 14_896
+
+    @classmethod
+    def max_fetch_blocks(cls, height):
+        if height <= 10:
+            return 100
+        return 3
 
 
 class BitcoinCashTestnet(BitcoinTestnetMixin, Coin):
@@ -783,6 +822,7 @@ class BitcoinSVRegtest(BitcoinSVTestnet):
     PEERS = []
     TX_COUNT = 1
     TX_COUNT_HEIGHT = 1
+    GENESIS_ACTIVATION = 10_000
 
 
 class BitcoinSegwitTestnet(BitcoinTestnetMixin, Coin):
@@ -1022,13 +1062,16 @@ class Namecoin(NameIndexMixin, AuxPowMixin, Coin):
     WIF_BYTE = bytes.fromhex("e4")
     GENESIS_HASH = ('000000000062b72c5e2ceb45fbc8587e'
                     '807c155b0da735e6483dfba2f0a9c770')
+    DESERIALIZER = lib_tx.DeserializerAuxPowSegWit
     TX_COUNT = 4415768
     TX_COUNT_HEIGHT = 329065
     TX_PER_BLOCK = 10
     RPC_PORT = 8336
     PEERS = [
+        'electrum-nmc.le-space.de s50002',
         'ex.lug.gs s446',
         'luggscoqbymhvnkp.onion t82',
+        'nmc.bitcoins.sk s50002',
         'ulrichard.ch s50006 t50005',
     ]
     BLOCK_PROCESSOR = block_proc.NameIndexBlockProcessor
@@ -1523,12 +1566,12 @@ class Peercoin(Coin):
     WIF_BYTE = bytes.fromhex("b7")
     GENESIS_HASH = ('0000000032fe677166d54963b62a4677'
                     'd8957e87c508eaa4fd7eb1c880cd27e3')
-    DESERIALIZER = lib_tx.DeserializerTxTime
+    DESERIALIZER = lib_tx.DeserializerTxTimeSegWit
     DAEMON = daemon.FakeEstimateFeeDaemon
-    ESTIMATE_FEE = 0.01
+    ESTIMATE_FEE = 0.001
     RELAY_FEE = 0.01
-    TX_COUNT = 1207356
-    TX_COUNT_HEIGHT = 306425
+    TX_COUNT = 1691771
+    TX_COUNT_HEIGHT = 455409
     TX_PER_BLOCK = 4
     RPC_PORT = 9902
     REORG_LIMIT = 5000
@@ -1887,6 +1930,17 @@ class Sibcoin(Dash):
         return x11_gost_hash.getPoWHash(header)
 
 
+class SibcoinTestnet(Sibcoin):
+    SHORTNAME = "tSIB"
+    NET = "testnet"
+    XPUB_VERBYTES = bytes.fromhex("043587cf")
+    XPRV_VERBYTES = bytes.fromhex("04358394")
+    GENESIS_HASH = ('00000617791d0e19f524387f67e558b2'
+                    'a928b670b9a3b387ae003ad7f9093017')
+
+    RPC_PORT = 11944
+
+
 class Chips(Coin):
     NAME = "Chips"
     SHORTNAME = "CHIPS"
@@ -1921,7 +1975,9 @@ class Feathercoin(Coin):
     RPC_PORT = 9337
     REORG_LIMIT = 2000
     PEERS = [
-        'electrumx-ch-1.feathercoin.ch s t',
+        'electrumx-gb-1.feathercoin.network s t',
+        'electrumx-gb-2.feathercoin.network s t',
+        'electrumx-de-1.feathercoin.network s t',
     ]
 
 
@@ -2228,6 +2284,7 @@ class Odin(Coin):
 
     SESSIONCLS = DashElectrumX
     DAEMON = daemon.DashDaemon
+    DESERIALIZER = lib_tx.DeserializerSegWit
 
     @classmethod
     def static_header_offset(cls, height):
@@ -2316,6 +2373,7 @@ class Zcoin(Coin):
     MTP_HEADER_DATA_START = Coin.BASIC_HEADER_SIZE + MTP_HEADER_EXTRA_SIZE
     MTP_HEADER_DATA_END = MTP_HEADER_DATA_START + MTP_HEADER_DATA_SIZE
     STATIC_BLOCK_HEADERS = False
+    SESSIONCLS = DashElectrumX
     DAEMON = daemon.ZcoinMtpDaemon
     DESERIALIZER = lib_tx.DeserializerZcoin
     PEERS = [
@@ -2616,33 +2674,6 @@ class Pivx(Coin):
         else:
             import quark_hash
             return quark_hash.getPoWHash(header)
-
-    @classmethod
-    def electrum_header(cls, header, height):
-        version, = struct.unpack('<I', header[:4])
-        timestamp, bits, nonce = struct.unpack('<III', header[68:80])
-
-        if (version >= cls.ZEROCOIN_BLOCK_VERSION):
-            return {
-                'block_height': height,
-                'version': version,
-                'prev_block_hash': hash_to_str(header[4:36]),
-                'merkle_root': hash_to_str(header[36:68]),
-                'timestamp': timestamp,
-                'bits': bits,
-                'nonce': nonce,
-                'acc_checkpoint': hash_to_str(header[80:112])
-            }
-        else:
-            return {
-                'block_height': height,
-                'version': version,
-                'prev_block_hash': hash_to_str(header[4:36]),
-                'merkle_root': hash_to_str(header[36:68]),
-                'timestamp': timestamp,
-                'bits': bits,
-                'nonce': nonce,
-            }
 
 
 class PivxTestnet(Pivx):
@@ -3271,3 +3302,61 @@ class GravityZeroCoin(ScryptMixin, Coin):
     RPC_PORT = 36442
     ESTIMATE_FEE = 0.01
     RELAY_FEE = 0.01
+
+
+class Simplicity(Coin):
+    NAME = "Simplicity"
+    SHORTNAME = "SPL"
+    NET = "mainnet"
+    XPUB_VERBYTES = bytes.fromhex("0444d5bc")
+    XPRV_VERBYTES = bytes.fromhex("0444f0a3")
+    P2PKH_VERBYTE = bytes.fromhex("12")
+    P2SH_VERBYTE = bytes.fromhex("3b")
+    WIF_BYTE = bytes.fromhex("5d")
+    GENESIS_HASH = ('f4bbfc518aa3622dbeb8d2818a606b82c2b8b1ac2f28553ebdb6fc04d7abaccf')
+    RPC_PORT = 11958
+    TX_COUNT = 1726548
+    TX_COUNT_HEIGHT = 1040000
+    TX_PER_BLOCK = 5
+    REORG_LIMIT = 100
+    DESERIALIZER = lib_tx.DeserializerSimplicity
+
+    @classmethod
+    def header_hash(cls, header):
+        '''Given a header return the hash.'''
+        version, = util.unpack_le_uint32_from(header)
+
+        if version < 2:
+            import quark_hash
+            return quark_hash.getPoWHash(header)
+        else:
+            return double_sha256(header)
+
+
+class Myce(Coin):
+    NAME = "Myce"
+    SHORTNAME = "YCE"
+    NET = "mainnet"
+    XPUB_VERBYTES = bytes.fromhex("0488b21e")
+    XPRV_VERBYTES = bytes.fromhex("0488ade4")
+    P2PKH_VERBYTE = bytes.fromhex("32")
+    P2SH_VERBYTE = bytes.fromhex("55")
+    WIF_BYTE = bytes.fromhex("99")
+    GENESIS_HASH = ('0000c74cc66c72cb1a327c5c1d4893ae5276aa50be49fb23cec21df1a2f20d87')
+    RPC_PORT = 23512
+    TX_COUNT = 1568977
+    TX_COUNT_HEIGHT = 774450
+    TX_PER_BLOCK = 3
+    REORG_LIMIT = 100
+    DESERIALIZER = lib_tx.DeserializerSimplicity
+
+    @classmethod
+    def header_hash(cls, header):
+        '''Given a header return the hash.'''
+        version, = util.unpack_le_uint32_from(header)
+
+        if version < 7:
+            import scrypt
+            return scrypt.hash(header, header, 1024, 1, 1, 32)
+        else:
+            return double_sha256(header)
